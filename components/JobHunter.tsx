@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { extractJobData, calculateMatchScore, generateCoverLetter, searchJobs, mutateResume, createStrategyPlan, generateStrategyBrief } from '../services/gemini';
-import { Job, UserProfile, MatchResult, ApplicationStatus, ApplicationLog, DiscoveredJob, CoverLetterStyle, RiskStatus, JobIntent, CommandResult, StrategyPlan } from '../types';
-import CommandTerminal from './CommandTerminal';
+import { extractJobData, calculateMatchScore, generateCoverLetter, searchJobs, mutateResume, createStrategyPlan, generateStrategyBrief } from '../services/gemini.ts';
+import { Job, UserProfile, MatchResult, ApplicationStatus, ApplicationLog, DiscoveredJob, CoverLetterStyle, RiskStatus, JobIntent, CommandResult, StrategyPlan } from '../types.ts';
+import CommandTerminal from './CommandTerminal.tsx';
 
 interface JobHunterProps {
   profile: UserProfile;

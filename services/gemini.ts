@@ -1,9 +1,15 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Job, UserProfile, MatchResult, DiscoveredJob, CoverLetterStyle, JobIntent, CommandResult, StrategyPlan, ResumeMutation } from "../types";
+import { Job, UserProfile, MatchResult, DiscoveredJob, CoverLetterStyle, JobIntent, CommandResult, StrategyPlan, ResumeMutation } from "../types.ts";
 
 // Helper to get a fresh AI instance to ensure the most up-to-date API key is used
-const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const getAi = () => {
+  const apiKey = (window as any).process?.env?.API_KEY;
+  if (!apiKey) {
+    console.warn("Gemini API Key missing.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || "" });
+};
 
 const STYLE_PROMPTS: Record<CoverLetterStyle, string> = {
   [CoverLetterStyle.ULTRA_CONCISE]: "Be brutally brief. 1-2 punchy sentences max. High signal, zero noise.",

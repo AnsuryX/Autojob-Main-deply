@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import Layout from './components/Layout';
-import ProfileEditor from './components/ProfileEditor';
-import JobHunter from './components/JobHunter';
-import ApplicationTracker from './components/ApplicationTracker';
-import Auth from './components/Auth';
-import { AppState, ApplicationLog, UserProfile, StrategyPlan, ApplicationStatus } from './types';
-import { DEFAULT_PROFILE } from './constants';
-import { supabase } from './lib/supabase';
+import Layout from './components/Layout.tsx';
+import ProfileEditor from './components/ProfileEditor.tsx';
+import JobHunter from './components/JobHunter.tsx';
+import ApplicationTracker from './components/ApplicationTracker.tsx';
+import Auth from './components/Auth.tsx';
+import { AppState, ApplicationLog, UserProfile, StrategyPlan, ApplicationStatus } from './types.ts';
+import { DEFAULT_PROFILE } from './constants.tsx';
+import { supabase } from './lib/supabase.ts';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('discover');
