@@ -1,13 +1,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Using environment variables is standard practice for production hosting.
-// Cloudflare Pages handles process.env injection during the build/edge-runtime.
-const supabaseUrl = process.env.SUPABASE_URL || 'https://mkwuyxigbnyrkcwvfgjq.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'sb_publishable_VDrYtNeRIrz1NMp87QAWXA_2LzlC2o-';
+// Accessing window.process to prevent ReferenceError in "no-build" environments
+const env = (window as any).process?.env || {};
+
+const supabaseUrl = env.SUPABASE_URL || 'https://mkwuyxigbnyrkcwvfgjq.supabase.co';
+const supabaseAnonKey = env.SUPABASE_ANON_KEY || 'sb_publishable_VDrYtNeRIrz1NMp87QAWXA_2LzlC2o-';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase configuration is incomplete. Authentication may fail.");
+  console.error("CRITICAL: Supabase credentials missing from environment.");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

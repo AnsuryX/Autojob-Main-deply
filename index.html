@@ -10,26 +10,31 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2906/2906206.png">
     
-    <!-- Open Graph / Social Media -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="AutoJob Cloud">
-    <meta property="og:description" content="Autonomous job application automation with AI-driven resume mutation.">
-    <meta property="og:image" content="https://cdn-icons-png.flaticon.com/512/2906/2906206.png">
+    <!-- Environment Variable Shim for No-Build Deploys -->
+    <script>
+      window.process = {
+        env: {
+          API_KEY: "", // Will be injected by Cloudflare if using a build plugin, or handled by the platform
+          SUPABASE_URL: "https://mkwuyxigbnyrkcwvfgjq.supabase.co",
+          SUPABASE_ANON_KEY: "sb_publishable_VDrYtNeRIrz1NMp87QAWXA_2LzlC2o-"
+        }
+      };
+    </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
       "imports": {
-        "react/": "https://esm.sh/react@^19.2.3/",
-        "react": "https://esm.sh/react@^19.2.3",
-        "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.45.4"
+        "react": "https://esm.sh/react@19.2.3",
+        "react/": "https://esm.sh/react@19.2.3/",
+        "react-dom": "https://esm.sh/react-dom@19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@19.2.3/",
+        "@google/genai": "https://esm.sh/@google/genai@1.34.0",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4"
       }
     }
     </script>
     <style>
-      /* Custom scrollbar for a more premium look */
       ::-webkit-scrollbar { width: 8px; }
       ::-webkit-scrollbar-track { background: #f1f5f9; }
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -39,5 +44,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased overflow-x-hidden">
     <div id="root"></div>
+    <!-- Load the application entry point -->
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
