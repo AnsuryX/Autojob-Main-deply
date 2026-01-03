@@ -121,7 +121,8 @@ export enum ApplicationStatus {
   FAILED = 'FAILED',
   RISK_HALT = 'RISK_HALT',
   INTERPRETING = 'INTERPRETING',
-  STRATEGIZING = 'STRATEGIZING'
+  STRATEGIZING = 'STRATEGIZING',
+  AUGMENTING = 'AUGMENTING'
 }
 
 export interface CommandResult {
@@ -164,6 +165,8 @@ export interface ApplicationLog {
   status: ApplicationStatus;
   timestamp: string;
   url: string;
+  platform?: string;
+  location?: string;
   coverLetter?: string;
   coverLetterStyle?: CoverLetterStyle;
   mutatedResume?: ResumeJson;
