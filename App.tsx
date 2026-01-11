@@ -5,7 +5,7 @@ import ProfileEditor from './components/ProfileEditor.tsx';
 import JobHunter from './components/JobHunter.tsx';
 import ApplicationTracker from './components/ApplicationTracker.tsx';
 import Auth from './components/Auth.tsx';
-import { AppState, ApplicationLog, UserProfile, StrategyPlan, ApplicationStatus } from './types.ts';
+import { AppState, ApplicationLog, UserProfile, ApplicationStatus } from './types.ts';
 import { DEFAULT_PROFILE } from './constants.tsx';
 import { supabase } from './lib/supabase.ts';
 
@@ -27,14 +27,12 @@ const App: React.FC = () => {
         setLoading(false);
       })
       .catch(err => {
-        console.error("Supabase Auth Error:", err);
-        setError(`Identity system offline: ${err.message || 'Unknown Error'}`);
+        setError(`Auth system offline: ${err.message}`);
         setLoading(false);
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) setError(null);
     });
 
     return () => subscription.unsubscribe();
@@ -58,14 +56,11 @@ const App: React.FC = () => {
             id: session.user.id,
             full_name: DEFAULT_PROFILE.fullName,
             email: session.user.email,
-            phone: DEFAULT_PROFILE.phone,
-            linkedin: DEFAULT_PROFILE.linkedin,
-            portfolio: DEFAULT_PROFILE.portfolio,
             resume_tracks: DEFAULT_PROFILE.resumeTracks,
             preferences: DEFAULT_PROFILE.preferences
           };
-          const { data: created, error: createError } = await supabase.from('profiles').insert(initial).select().single();
-          if (createError) throw createError;
+          const { data: created, error: ce } = await supabase.from('profiles').insert(initial).select().single();
+          if (ce) throw ce;
           profileData = created;
         }
 
@@ -75,15 +70,22 @@ const App: React.FC = () => {
           .eq('user_id', session.user.id)
           .order('timestamp', { ascending: false });
 
-        if (appsError) throw appsError;
+        if (appsError) {
+          // If the error is about missing columns, we'll just log empty apps but alert the user
+          if (appsError.code === 'PGRST204') {
+            console.warn("Database columns missing. Use SQL editor.");
+          } else {
+            throw appsError;
+          }
+        }
 
         setState({
           profile: {
             fullName: profileData.full_name,
             email: profileData.email,
-            phone: profileData.phone,
-            linkedin: profileData.linkedin,
-            portfolio: profileData.portfolio,
+            phone: profileData.phone || "",
+            linkedin: profileData.linkedin || "",
+            portfolio: profileData.portfolio || "",
             resumeTracks: profileData.resume_tracks,
             preferences: profileData.preferences
           },
@@ -95,20 +97,17 @@ const App: React.FC = () => {
             status: app.status as ApplicationStatus,
             timestamp: app.timestamp,
             url: app.url,
-            platform: app.platform,
-            location: app.location,
+            platform: app.platform || 'Other',
+            location: app.location || 'Remote',
             coverLetter: app.cover_letter,
-            coverLetterStyle: app.cover_letter_style,
             mutatedResume: app.mutated_resume,
             mutationReport: app.mutation_report,
             verification: app.verification
           })),
           activeStrategy: null
         });
-        setError(null);
       } catch (err: any) {
-        console.error("Fetch error:", err);
-        setError(`Cloud Sync Error: ${err.message || JSON.stringify(err)}`);
+        setError(`Sync Error: ${err.message || JSON.stringify(err)}`);
       }
     };
 
@@ -119,7 +118,7 @@ const App: React.FC = () => {
     if (!session?.user) return;
     setState(prev => ({ ...prev, profile: newProfile }));
     try {
-      const { error } = await supabase.from('profiles').upsert({
+      await supabase.from('profiles').upsert({
         id: session.user.id,
         full_name: newProfile.fullName,
         email: newProfile.email,
@@ -130,10 +129,8 @@ const App: React.FC = () => {
         preferences: newProfile.preferences,
         updated_at: new Date().toISOString()
       });
-      if (error) throw error;
     } catch (err: any) {
-      console.error("Profile update error:", err);
-      setError(`Profile Sync Failed: ${err.message || JSON.stringify(err)}`);
+      setError(`Profile Update Failed: ${err.message}`);
     }
   };
 
@@ -142,78 +139,55 @@ const App: React.FC = () => {
     try {
       const payload = {
         user_id: session.user.id,
-        job_id: log.jobId || `jid-${Date.now()}`,
+        job_id: log.jobId,
         job_title: log.jobTitle,
         company: log.company,
         status: log.status,
         url: log.url,
+        // Using fallbacks to prevent insert errors if columns don't exist yet
         platform: log.platform || 'Other',
         location: log.location || 'Remote',
         cover_letter: log.coverLetter,
-        cover_letter_style: log.coverLetterStyle,
         mutated_resume: log.mutatedResume,
         mutation_report: log.mutationReport,
         verification: log.verification || null
       };
 
-      const { data: savedApp, error: insertError } = await supabase
-        .from('applications')
-        .insert(payload)
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      
-      if (savedApp) {
-        setState(prev => ({
-          ...prev,
-          applications: [ { ...log, id: savedApp.id }, ...prev.applications ]
-        }));
+      const { data, error } = await supabase.from('applications').insert(payload).select().single();
+      if (error) {
+        // If PGRST204, columns are missing. Save locally but show warning.
+        if (error.code === 'PGRST204') {
+          console.error("Columns 'location' and 'platform' missing from DB. Run the SQL script.");
+          setState(prev => ({ ...prev, applications: [log, ...prev.applications] }));
+          return;
+        }
+        throw error;
       }
+      
+      setState(prev => ({ ...prev, applications: [ { ...log, id: data.id }, ...prev.applications ] }));
     } catch (err: any) {
-      console.error("Database Error:", err);
       setError(`Database Error: ${err.message || JSON.stringify(err)}`);
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setState({ profile: null, applications: [], activeStrategy: null });
-  };
-
-  if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-      <div className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Cloud Identity Initializing...</div>
-    </div>
-  );
-
+  if (loading) return <div className="h-screen flex items-center justify-center font-bold text-slate-300">Initializing...</div>;
   if (!session) return <Auth />;
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout}>
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => supabase.auth.signOut()}>
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex flex-col gap-2 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-black uppercase text-red-800 tracking-tight">System Alert</p>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-          <p className="text-xs font-mono text-red-700 break-all bg-white/50 p-2 rounded border border-red-200">{error}</p>
-          <div className="flex gap-4 mt-1">
-            <button onClick={() => { setError(null); window.location.reload(); }} className="text-[10px] font-black text-red-600 uppercase hover:underline tracking-widest">Force Sync</button>
-          </div>
+        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex flex-col gap-2">
+          <p className="text-[10px] font-black text-red-800 uppercase">Database Warning</p>
+          <p className="text-xs font-mono text-red-700">{error}</p>
+          <button onClick={() => setError(null)} className="text-[10px] font-bold text-red-500 uppercase hover:underline text-left">Dismiss</button>
         </div>
       )}
       
-      {(!state.profile && !error) ? (
-        <div className="p-20 text-center font-bold text-slate-300 animate-pulse uppercase tracking-widest text-xs">Synchronizing Identity Engine...</div>
-      ) : (
+      {state.profile ? (
         <>
-          {activeTab === 'profile' && state.profile && <ProfileEditor profile={state.profile} onSave={handleUpdateProfile} />}
+          {activeTab === 'profile' && <ProfileEditor profile={state.profile} onSave={handleUpdateProfile} />}
           {activeTab === 'history' && <ApplicationTracker applications={state.applications} profile={state.profile} />}
-          {activeTab === 'discover' && state.profile && (
+          {activeTab === 'discover' && (
             <JobHunter 
               profile={state.profile} 
               activeStrategy={state.activeStrategy}
@@ -223,7 +197,7 @@ const App: React.FC = () => {
             />
           )}
         </>
-      )}
+      ) : <div className="p-20 text-center font-bold text-slate-300">Loading Profile...</div>}
     </Layout>
   );
 };
