@@ -28,7 +28,7 @@ const App: React.FC = () => {
       })
       .catch(err => {
         console.error("Supabase Auth Error:", err);
-        setError("Identity system offline. Retrying...");
+        setError(`Identity system offline: ${err.message || 'Unknown Error'}`);
         setLoading(false);
       });
 
@@ -107,8 +107,8 @@ const App: React.FC = () => {
         });
         setError(null);
       } catch (err: any) {
-        const msg = err.message || JSON.stringify(err);
-        setError(`Cloud Sync Error: ${msg}`);
+        console.error("Fetch error:", err);
+        setError(`Cloud Sync Error: ${err.message || JSON.stringify(err)}`);
       }
     };
 
@@ -132,7 +132,8 @@ const App: React.FC = () => {
       });
       if (error) throw error;
     } catch (err: any) {
-      console.error("Profile update error:", err.message);
+      console.error("Profile update error:", err);
+      setError(`Profile Sync Failed: ${err.message || JSON.stringify(err)}`);
     }
   };
 
@@ -161,13 +162,7 @@ const App: React.FC = () => {
         .select()
         .single();
 
-      if (insertError) {
-        if (insertError.message.includes('column')) {
-           console.warn("Potential schema mismatch. Attempting refresh...");
-           // This is where a manual schema reload would be triggered if possible
-        }
-        throw insertError;
-      }
+      if (insertError) throw insertError;
       
       if (savedApp) {
         setState(prev => ({
@@ -176,9 +171,8 @@ const App: React.FC = () => {
         }));
       }
     } catch (err: any) {
-      const msg = err.message || JSON.stringify(err);
-      setError(`Application Storage Error: ${msg}`);
       console.error("Database Error:", err);
+      setError(`Database Error: ${err.message || JSON.stringify(err)}`);
     }
   };
 
@@ -199,11 +193,16 @@ const App: React.FC = () => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout}>
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between shadow-sm">
-          <p className="text-[10px] font-black uppercase text-red-800 truncate tracking-tight">{error}</p>
-          <div className="flex gap-4">
-            <button onClick={() => { setError(null); window.location.reload(); }} className="text-[10px] font-black text-red-600 uppercase hover:underline tracking-widest">Reload</button>
-            <button onClick={() => setError(null)} className="text-[10px] font-black text-slate-400 uppercase hover:underline tracking-widest">Clear</button>
+        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex flex-col gap-2 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase text-red-800 tracking-tight">System Alert</p>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <p className="text-xs font-mono text-red-700 break-all bg-white/50 p-2 rounded border border-red-200">{error}</p>
+          <div className="flex gap-4 mt-1">
+            <button onClick={() => { setError(null); window.location.reload(); }} className="text-[10px] font-black text-red-600 uppercase hover:underline tracking-widest">Force Sync</button>
           </div>
         </div>
       )}
