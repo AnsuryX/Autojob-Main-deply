@@ -70,14 +70,7 @@ const App: React.FC = () => {
           .eq('user_id', session.user.id)
           .order('timestamp', { ascending: false });
 
-        if (appsError) {
-          // If the error is about missing columns, we'll just log empty apps but alert the user
-          if (appsError.code === 'PGRST204') {
-            console.warn("Database columns missing. Use SQL editor.");
-          } else {
-            throw appsError;
-          }
-        }
+        if (appsError && appsError.code !== 'PGRST204') throw appsError;
 
         setState({
           profile: {
@@ -107,7 +100,7 @@ const App: React.FC = () => {
           activeStrategy: null
         });
       } catch (err: any) {
-        setError(`Sync Error: ${err.message || JSON.stringify(err)}`);
+        setError(`Cloud Sync Issue: ${err.message || 'Check database schema'}`);
       }
     };
 
@@ -136,6 +129,10 @@ const App: React.FC = () => {
 
   const handleNewApplication = async (log: ApplicationLog) => {
     if (!session?.user) return;
+    
+    // Optimistic Update
+    setState(prev => ({ ...prev, applications: [log, ...prev.applications] }));
+
     try {
       const payload = {
         user_id: session.user.id,
@@ -144,7 +141,6 @@ const App: React.FC = () => {
         company: log.company,
         status: log.status,
         url: log.url,
-        // Using fallbacks to prevent insert errors if columns don't exist yet
         platform: log.platform || 'Other',
         location: log.location || 'Remote',
         cover_letter: log.coverLetter,
@@ -153,33 +149,47 @@ const App: React.FC = () => {
         verification: log.verification || null
       };
 
-      const { data, error } = await supabase.from('applications').insert(payload).select().single();
-      if (error) {
-        // If PGRST204, columns are missing. Save locally but show warning.
-        if (error.code === 'PGRST204') {
-          console.error("Columns 'location' and 'platform' missing from DB. Run the SQL script.");
-          setState(prev => ({ ...prev, applications: [log, ...prev.applications] }));
-          return;
-        }
-        throw error;
-      }
+      const { data, error: insertError } = await supabase.from('applications').insert(payload).select().single();
       
-      setState(prev => ({ ...prev, applications: [ { ...log, id: data.id }, ...prev.applications ] }));
+      if (insertError) {
+        if (insertError.code === 'PGRST204') {
+          console.error("Column missing in 'applications' table. Data saved in memory only.");
+          setError("Warning: Database schema outdated. Columns 'location' or 'platform' missing. Run SQL script.");
+        } else {
+          throw insertError;
+        }
+      } else if (data) {
+        // Replace temporary log with DB log (to get correct ID)
+        setState(prev => ({
+          ...prev,
+          applications: prev.applications.map(app => app.id === log.id ? { ...log, id: data.id } : app)
+        }));
+      }
     } catch (err: any) {
-      setError(`Database Error: ${err.message || JSON.stringify(err)}`);
+      console.error("Failed to sync application:", err);
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center font-bold text-slate-300">Initializing...</div>;
+  if (loading) return (
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+       <div className="text-center space-y-4">
+          <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
+          <p className="font-black text-slate-300 uppercase tracking-widest text-xs">Synchronizing Identity...</p>
+       </div>
+    </div>
+  );
+  
   if (!session) return <Auth />;
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => supabase.auth.signOut()}>
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex flex-col gap-2">
-          <p className="text-[10px] font-black text-red-800 uppercase">Database Warning</p>
-          <p className="text-xs font-mono text-red-700">{error}</p>
-          <button onClick={() => setError(null)} className="text-[10px] font-bold text-red-500 uppercase hover:underline text-left">Dismiss</button>
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex flex-col gap-2 shadow-sm animate-in slide-in-from-top-4">
+          <div className="flex justify-between items-center">
+            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Database Sync Alert</p>
+            <button onClick={() => setError(null)} className="text-amber-500 hover:text-amber-700 font-bold">✕</button>
+          </div>
+          <p className="text-xs font-mono text-amber-700">{error}</p>
         </div>
       )}
       
@@ -197,7 +207,7 @@ const App: React.FC = () => {
             />
           )}
         </>
-      ) : <div className="p-20 text-center font-bold text-slate-300">Loading Profile...</div>}
+      ) : <div className="p-20 text-center font-black text-slate-200 uppercase tracking-widest">Building Agent...</div>}
     </Layout>
   );
 };

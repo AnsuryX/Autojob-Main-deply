@@ -1,7 +1,7 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { extractJobData, calculateMatchScore, generateCoverLetter, searchJobs, mutateResume } from '../services/gemini.ts';
-import { Job, UserProfile, MatchResult, ApplicationStatus, ApplicationLog, DiscoveredJob, CoverLetterStyle, VerificationProof } from '../types.ts';
+import { Job, UserProfile, MatchResult, ApplicationStatus, ApplicationLog, DiscoveredJob, CoverLetterStyle, VerificationProof, CommandResult } from '../types.ts';
 import CommandTerminal from './CommandTerminal.tsx';
 import { Icons } from '../constants.tsx';
 
@@ -14,19 +14,19 @@ interface JobHunterProps {
 }
 
 const statusConfig: Record<ApplicationStatus, { label: string; color: string }> = {
-  [ApplicationStatus.PENDING]: { label: 'Ready to Start', color: 'bg-slate-200' },
-  [ApplicationStatus.EXTRACTING]: { label: 'Reading Job Details...', color: 'bg-indigo-400' },
-  [ApplicationStatus.MATCHING]: { label: 'Checking Your Skills...', color: 'bg-indigo-500' },
-  [ApplicationStatus.GENERATING_CL]: { label: 'Writing Cover Letter...', color: 'bg-indigo-600' },
-  [ApplicationStatus.MUTATING_RESUME]: { label: 'Tailoring Your Resume...', color: 'bg-indigo-700' },
-  [ApplicationStatus.APPLYING]: { label: 'Preparing Dispatch Kit...', color: 'bg-indigo-800' },
-  [ApplicationStatus.VERIFYING]: { label: 'Finalizing Record...', color: 'bg-emerald-500' },
-  [ApplicationStatus.COMPLETED]: { label: 'Package Ready!', color: 'bg-green-500' },
-  [ApplicationStatus.FAILED]: { label: 'Error occurred', color: 'bg-red-500' },
+  [ApplicationStatus.PENDING]: { label: 'Idle', color: 'bg-slate-200' },
+  [ApplicationStatus.EXTRACTING]: { label: 'Analyzing Job Posting...', color: 'bg-indigo-400' },
+  [ApplicationStatus.MATCHING]: { label: 'Matching Your Skills...', color: 'bg-indigo-500' },
+  [ApplicationStatus.GENERATING_CL]: { label: 'Writing Custom Letter...', color: 'bg-indigo-600' },
+  [ApplicationStatus.MUTATING_RESUME]: { label: 'Tailoring Resume Summary...', color: 'bg-indigo-700' },
+  [ApplicationStatus.APPLYING]: { label: 'Finalizing Dispatch Kit...', color: 'bg-indigo-800' },
+  [ApplicationStatus.VERIFYING]: { label: 'Saving to Cloud...', color: 'bg-emerald-500' },
+  [ApplicationStatus.COMPLETED]: { label: 'Ready for Submission!', color: 'bg-green-500' },
+  [ApplicationStatus.FAILED]: { label: 'Mission Failed', color: 'bg-red-500' },
   [ApplicationStatus.AUGMENTING]: { label: 'Enhancing Profile...', color: 'bg-purple-500' },
-  [ApplicationStatus.INTERPRETING]: { label: 'Understanding Request...', color: 'bg-indigo-300' },
-  [ApplicationStatus.STRATEGIZING]: { label: 'Planning Strategy...', color: 'bg-indigo-400' },
-  [ApplicationStatus.RISK_HALT]: { label: 'Security Warning', color: 'bg-amber-500' },
+  [ApplicationStatus.INTERPRETING]: { label: 'Decoding Command...', color: 'bg-indigo-300' },
+  [ApplicationStatus.STRATEGIZING]: { label: 'Optimizing Search...', color: 'bg-indigo-400' },
+  [ApplicationStatus.RISK_HALT]: { label: 'Blocked by Bot-Check', color: 'bg-amber-500' },
 };
 
 const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
@@ -42,13 +42,16 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
   const addLog = useCallback((msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]), []);
 
   const copyToClipboard = (text: string, label: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
-    addLog(`Copied ${label} to clipboard!`);
+    addLog(`Success: ${label} copied to clipboard.`);
   };
 
-  const processInput = async () => {
-    if (!jobInput.trim()) return;
-    const isUrl = jobInput.toLowerCase().startsWith('http');
+  const processInput = async (inputOverride?: string) => {
+    const target = inputOverride || jobInput;
+    if (!target.trim()) return;
+    
+    const isUrl = target.toLowerCase().startsWith('http');
     setIsProcessing(true);
     setLogs([]);
     setMatch(null);
@@ -57,19 +60,19 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
     
     try {
       if (isUrl) {
-        addLog(`Analyzing link: ${jobInput}`);
-        const job = await extractJobData(jobInput);
+        addLog(`Analyzing link: ${target}`);
+        const job = await extractJobData(target);
         setCurrentJob(job);
-        addLog(`Found: ${job.title} @ ${job.company}`);
+        addLog(`Identified: ${job.title} at ${job.company}`);
         
         setAutomationStep(ApplicationStatus.MATCHING);
         const res = await calculateMatchScore(job, profile);
         setMatch(res);
       } else {
-        addLog(`Searching live listings for: "${jobInput}"...`);
-        const results = await searchJobs({ ...profile.preferences, targetRoles: [jobInput] });
+        addLog(`Searching web for: "${target}"...`);
+        const results = await searchJobs({ ...profile.preferences, targetRoles: [target] });
         setDiscoveredJobs(results || []);
-        addLog(`Found ${results?.length || 0} active leads.`);
+        addLog(`Found ${results?.length || 0} active leads matching your query.`);
       }
     } catch (e: any) {
       addLog(`Error: ${e.message}`);
@@ -77,6 +80,14 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
     } finally {
       setIsProcessing(false);
       if (automationStep !== ApplicationStatus.FAILED) setAutomationStep(ApplicationStatus.PENDING);
+    }
+  };
+
+  const handleCommand = (cmd: CommandResult) => {
+    addLog(`Command Received: ${cmd.action} ${cmd.goal || ''}`);
+    if (cmd.goal) {
+      setJobInput(cmd.goal);
+      processInput(cmd.goal);
     }
   };
 
@@ -94,8 +105,8 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
       
       setAutomationStep(ApplicationStatus.VERIFYING);
       const proof: VerificationProof = {
-        dispatchHash: `DISP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-        networkLogs: ["Tailoring Complete", "Artifacts stored in cloud", "Ready for manual submission"],
+        dispatchHash: `TXN-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+        networkLogs: ["Tailoring Complete", "Artifacts stored in cloud", "Ready for manual portal entry"],
         serverStatusCode: 200
       };
 
@@ -116,7 +127,7 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
       });
 
       setAutomationStep(ApplicationStatus.COMPLETED);
-      addLog(`Package generated! Use the buttons below to apply.`);
+      addLog(`Package ready! Use the 'Copy' buttons to apply.`);
     } catch (e: any) {
       addLog(`Tailoring Failed: ${e.message}`);
       setAutomationStep(ApplicationStatus.FAILED);
@@ -127,11 +138,11 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
 
   return (
     <div className="space-y-6">
-      <CommandTerminal onExecute={(cmd) => addLog(`Command: ${cmd.action}`)} isProcessing={isProcessing} />
+      <CommandTerminal onExecute={handleCommand} isProcessing={isProcessing} />
 
       <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm space-y-4">
         <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-          <Icons.Briefcase /> Lead Finder & Tailor
+          <Icons.Briefcase /> Lead Finder & Assistant
         </h2>
         <div className="relative">
           <input
@@ -139,29 +150,29 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
             value={jobInput}
             onChange={(e) => setJobInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && processInput()}
-            placeholder="Paste Job URL or search for 'Software Engineer'..."
-            className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all"
+            placeholder="Paste a Job Link or type e.g. 'Frontend Lead'..."
+            className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all pr-40"
           />
           <button
-            onClick={processInput}
+            onClick={() => processInput()}
             disabled={isProcessing || !jobInput}
-            className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50"
+            className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 transition-all"
           >
-            {isProcessing ? 'Working...' : 'Go'}
+            {isProcessing ? 'Searching...' : 'Find Jobs'}
           </button>
         </div>
       </div>
 
       {discoveredJobs.length > 0 && !currentJob && (
         <div className="space-y-3">
-          <p className="text-[10px] font-black uppercase text-slate-400 px-4">Live Listings Found</p>
+          <p className="text-[10px] font-black uppercase text-slate-400 px-4 tracking-[0.2em]">Web Discovery Results</p>
           {discoveredJobs.map((job, i) => (
-            <div key={i} className="bg-white border border-slate-200 p-5 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:border-indigo-400" onClick={() => { setJobInput(job.url); processInput(); }}>
+            <div key={i} className="bg-white border border-slate-200 p-5 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:border-indigo-400 group transition-all" onClick={() => { setJobInput(job.url); processInput(job.url); }}>
               <div>
                 <h4 className="font-bold text-slate-800">{job.title}</h4>
-                <p className="text-xs text-slate-400 font-bold">{job.company} • {job.location}</p>
+                <p className="text-xs text-slate-400 font-bold">{job.company} • <span className="text-indigo-500">{job.location}</span></p>
               </div>
-              <button className="text-[10px] font-black text-indigo-600 uppercase">Tailor Now</button>
+              <button className="bg-slate-50 text-[10px] font-black text-indigo-600 uppercase px-3 py-2 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all">Start Tailoring</button>
             </div>
           ))}
         </div>
@@ -170,66 +181,76 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
       {currentJob && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in zoom-in-95">
           <div className="bg-white rounded-[2rem] border border-slate-200 p-8 space-y-6 shadow-sm">
-            <div>
-              <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Active Lead</span>
-              <h3 className="text-2xl font-black text-slate-900 mt-1">{currentJob.title}</h3>
-              <p className="text-slate-500 font-bold">{currentJob.company} • {currentJob.location}</p>
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Active Target</span>
+                <h3 className="text-2xl font-black text-slate-900 mt-1 leading-tight">{currentJob.title}</h3>
+                <p className="text-slate-500 font-bold">{currentJob.company} • {currentJob.location}</p>
+              </div>
+              <button onClick={() => { setCurrentJob(null); setGeneratedArtifacts(null); }} className="p-2 text-slate-300 hover:text-red-500 transition-all"><Icons.Close /></button>
             </div>
 
-            {match && (
+            {match && !generatedArtifacts && (
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                 <div className="flex items-end gap-2 mb-2">
                   <span className="text-3xl font-black text-slate-900">{match.score}%</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase pb-1.5 tracking-widest">Match Strength</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase pb-1.5 tracking-widest">Match Rating</span>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed italic">"{match.reasoning}"</p>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">"{match.reasoning}"</p>
               </div>
             )}
 
             {generatedArtifacts ? (
               <div className="space-y-4">
-                <div className="p-4 bg-green-50 rounded-2xl border border-green-100 flex flex-col gap-3">
-                  <p className="text-xs font-bold text-green-700">✓ Your Tailored Dispatch Kit is Ready!</p>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="p-5 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white"><Icons.Check /></div>
+                    <p className="text-xs font-black text-emerald-800 uppercase tracking-tight">Your Dispatch Kit is Ready</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-2">
                     <button 
                       onClick={() => copyToClipboard(generatedArtifacts.cl, 'Cover Letter')}
-                      className="bg-white border border-green-200 p-3 rounded-xl text-[10px] font-black uppercase text-green-700 hover:bg-green-100 transition-all"
+                      className="flex items-center justify-between bg-white border border-emerald-200 px-4 py-3 rounded-xl text-[10px] font-black uppercase text-emerald-700 hover:bg-emerald-100 transition-all"
                     >
-                      Copy Cover Letter
+                      <span>1. Copy Tailored Letter</span>
+                      <Icons.History />
                     </button>
                     <button 
                       onClick={() => copyToClipboard(generatedArtifacts.resume.summary, 'Resume Summary')}
-                      className="bg-white border border-green-200 p-3 rounded-xl text-[10px] font-black uppercase text-green-700 hover:bg-green-100 transition-all"
+                      className="flex items-center justify-between bg-white border border-emerald-200 px-4 py-3 rounded-xl text-[10px] font-black uppercase text-emerald-700 hover:bg-emerald-100 transition-all"
                     >
-                      Copy Tailored Summary
+                      <span>2. Copy Optimized Summary</span>
+                      <Icons.History />
                     </button>
                   </div>
+
                   <a 
                     href={currentJob.applyUrl} 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="w-full bg-slate-900 text-white p-4 rounded-xl text-[10px] font-black uppercase text-center tracking-widest hover:bg-black"
+                    className="w-full bg-slate-900 text-white p-4 rounded-xl text-[10px] font-black uppercase text-center tracking-widest hover:bg-black shadow-lg flex items-center justify-center gap-3"
                   >
-                    Open Application Portal
+                    3. Open Company Career Portal
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                   </a>
                 </div>
-                <button onClick={() => setCurrentJob(null)} className="w-full text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Another Job</button>
               </div>
             ) : (
               <div className="space-y-4">
                 {isProcessing ? (
-                  <div className="text-center py-4">
+                  <div className="text-center py-4 bg-slate-50 rounded-2xl">
                     <p className="text-[10px] font-black text-indigo-600 uppercase animate-pulse">{statusConfig[automationStep].label}</p>
-                    <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className="mt-3 h-1.5 mx-8 bg-slate-200 rounded-full overflow-hidden">
                       <div className="h-full bg-indigo-500 animate-[loading_2s_ease-in-out_infinite]"></div>
                     </div>
                   </div>
                 ) : (
                   <button 
                     onClick={startTailoring} 
-                    className="w-full bg-indigo-600 text-white p-5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all"
+                    className="w-full bg-indigo-600 text-white p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all active:scale-95"
                   >
-                    Generate Tailored Package
+                    Create Custom Resume & Letter
                   </button>
                 )}
               </div>
@@ -237,10 +258,17 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, onApply }) => {
           </div>
 
           <div className="bg-slate-950 rounded-[2rem] p-8 font-mono text-[10px] text-slate-500 shadow-2xl flex flex-col max-h-[400px]">
-            <p className="text-indigo-400 font-black uppercase tracking-widest mb-4">Agent Telemetry</p>
-            <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-hide">
-              {logs.map((log, i) => <div key={i} className="pl-3 border-l border-white/10">{log}</div>)}
-              {logs.length === 0 && <div className="opacity-30">Awaiting instructions...</div>}
+            <p className="text-indigo-400 font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> 
+              Agent Operations Log
+            </p>
+            <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
+              {logs.map((log, i) => (
+                <div key={i} className="pl-3 border-l border-white/5 hover:border-indigo-500 transition-colors py-0.5">
+                  {log}
+                </div>
+              ))}
+              {logs.length === 0 && <div className="opacity-20 italic">Awaiting manual or command-line input...</div>}
             </div>
           </div>
         </div>
