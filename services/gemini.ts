@@ -47,12 +47,13 @@ export const interpretCommand = async (input: string): Promise<CommandResult> =>
 export const extractJobData = async (input: string): Promise<Job> => {
   try {
     const ai = getAi();
+    // Use search grounding to get the REAL context if it's just a URL
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: `Exhaustively analyze this job source. Use Google Search to verify the company and find the direct application URL if this link is gated or redirected: "${input}"`,
+      contents: `Exhaustively analyze this job source. Use Google Search to verify the company and find the direct application URL/Career page if this link is gated: "${input}"`,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a Job Intelligence Specialist. Extract precise title, company, location, requirements, and description. If the link is a LinkedIn/Indeed redirect, use search to find the original career page. Return valid JSON.",
+        systemInstruction: "You are a Job Intelligence Specialist. Extract precise title, company, location, technical requirements, and description. Identify if this is a high-signal role or a generic listing. Return JSON.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -82,7 +83,7 @@ export const extractJobData = async (input: string): Promise<Job> => {
     };
   } catch (error) {
     console.error("Extraction error:", error);
-    throw new Error("Target site rejected analysis. Try finding the direct career page link.");
+    throw new Error("Target site rejected analysis. Use a direct career page link for better results.");
   }
 };
 
@@ -90,9 +91,9 @@ export const calculateMatchScore = async (job: Job, profile: UserProfile): Promi
   const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Job Requirements: ${JSON.stringify(job.skills)}. Job Description: ${job.description}. Profile: ${JSON.stringify(profile.resumeTracks[0]?.content)}`,
+    contents: `Job Requirements: ${JSON.stringify(job.skills)}. JD Text: ${job.description}. Current Profile: ${JSON.stringify(profile.resumeTracks[0]?.content)}`,
     config: {
-      systemInstruction: "Analyze skill gaps. Identify specific technical and soft skills mentioned in the job but missing from the resume. Provide a score (0-100) and clear reasoning.",
+      systemInstruction: "Perform a brutal skill gap analysis. List exact keywords missing from the profile. Score 0-100.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -108,18 +109,17 @@ export const calculateMatchScore = async (job: Job, profile: UserProfile): Promi
   return JSON.parse(response.text || '{"score":0, "reasoning": "Analysis failed", "missingSkills": []}');
 };
 
-// Added missing generateCoverLetter function
 export const generateCoverLetter = async (job: Job, profile: UserProfile, style: CoverLetterStyle): Promise<string> => {
   const ai = getAi();
   const stylePrompt = STYLE_PROMPTS[style];
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Job: ${job.title} at ${job.company}. Description: ${job.description}. Profile: ${JSON.stringify(profile.resumeTracks[0]?.content)}. Style: ${stylePrompt}`,
+    contents: `Target: ${job.title} at ${job.company}. Job Context: ${job.description}. Profile Highlights: ${JSON.stringify(profile.resumeTracks[0]?.content.summary)}. Style: ${stylePrompt}`,
     config: {
-      systemInstruction: "You are a World-Class Career Coach and Ghostwriter. Write a highly persuasive, concise cover letter. Focus on matching the user's top achievements to the job's core needs. Do not include placeholders like [Date] or [Address]. Start directly with a greeting.",
+      systemInstruction: "Write a high-impact, short cover letter. Use the real company name. No placeholders. Focus on how you solve THEIR specific problems mentioned in the JD.",
     }
   });
-  return response.text || "Failed to generate cover letter.";
+  return response.text || "Neural generation failed.";
 };
 
 export const mutateResume = async (job: Job, profile: UserProfile): Promise<ResumeMutation> => {
@@ -127,9 +127,9 @@ export const mutateResume = async (job: Job, profile: UserProfile): Promise<Resu
   const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: `Target Job: ${job.title} at ${job.company}. Context: ${job.description}. Base Resume: ${JSON.stringify(profile.resumeTracks[0]?.content)}.`,
+    contents: `Rewrite this resume for: ${job.title} at ${job.company}. JD: ${job.description}. Base: ${JSON.stringify(profile.resumeTracks[0]?.content)}.`,
     config: {
-      systemInstruction: "You are a Resume Architect. Your goal is 100% ATS matching. 1. Inject missing skills into the skills array. 2. Rewrite experience bullet points using the job's keywords. 3. Mirror the JD's tone. Ensure professional accuracy.",
+      systemInstruction: "You are an ATS Optimization Agent. 1. Inject missing keywords from the JD into the 'skills' list. 2. Rewrite achievement bullets to use JD phrasing. 3. Maintain factual integrity—do not lie about years of experience. Return JSON.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -182,10 +182,10 @@ export const searchJobs = async (preferences: any): Promise<DiscoveredJob[]> => 
   const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: `Search the web for real, active job listings matching: ${JSON.stringify(preferences)}`,
+    contents: `Find REAL, active job listings matching these preferences: ${JSON.stringify(preferences)}. Only return roles posted recently.`,
     config: {
       tools: [{ googleSearch: {} }],
-      systemInstruction: "Find 10-15 REAL job listings from company career pages, LinkedIn, or Greenhouse. Do not hallucinate. Extract real URLs.",
+      systemInstruction: "Search the web (LinkedIn, Indeed, company career pages) for real job openings. Extract the actual URL, title, and company. Do not return placeholders.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -212,7 +212,7 @@ export const createStrategyPlan = async (goal: string, profile: UserProfile): Pr
     model: 'gemini-3-flash-preview',
     contents: `Goal: "${goal}"`,
     config: {
-      systemInstruction: "Create a job hunt strategy plan including daily quotas.",
+      systemInstruction: "Create a technical job hunt strategy. Be precise about platform targets and daily goals.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -227,14 +227,14 @@ export const createStrategyPlan = async (goal: string, profile: UserProfile): Pr
     }
   });
   const data = JSON.parse(response.text || "{}");
-  return { ...data, status: 'ACTIVE', platforms: ['LinkedIn', 'Career Pages'], lastUpdate: new Date().toISOString() };
+  return { ...data, status: 'ACTIVE', platforms: ['LinkedIn', 'Direct Career Pages'], lastUpdate: new Date().toISOString() };
 };
 
 export const parseResume = async (base64: string, mimeType: string): Promise<any> => {
   const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: [{ inlineData: { data: base64, mimeType } }, { text: "Extract resume data into JSON." }],
+    contents: [{ inlineData: { data: base64, mimeType } }, { text: "Extract full resume data into JSON structure." }],
     config: {
       responseMimeType: "application/json",
       responseSchema: {
