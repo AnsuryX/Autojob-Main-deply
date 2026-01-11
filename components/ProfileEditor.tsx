@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, ResumeTrack, Project } from '../types';
 import { parseResume } from '../services/gemini';
+import { jsPDF } from 'jspdf';
 
 interface ProfileEditorProps {
   profile: UserProfile;
@@ -111,6 +112,54 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ profile, onSave }) => {
         return t;
       })
     }));
+  };
+
+  const downloadBaseTrack = (track: ResumeTrack) => {
+    const doc = new jsPDF();
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const maxWidth = pageWidth - (margin * 2);
+    let y = margin;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.text(editedProfile.fullName, margin, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${editedProfile.email} | ${editedProfile.phone} | ${editedProfile.linkedin}`, margin, y);
+    y += 15;
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Profile Summary', margin, y);
+    y += 6;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const summaryLines = doc.splitTextToSize(track.content.summary, maxWidth);
+    doc.text(summaryLines, margin, y);
+    y += (summaryLines.length * 5) + 12;
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Experience', margin, y);
+    y += 8;
+    (track.content.experience || []).forEach(exp => {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${exp.role} @ ${exp.company}`, margin, y);
+      y += 5;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      (exp.achievements || []).forEach(ach => {
+        const achLines = doc.splitTextToSize(`- ${ach}`, maxWidth - 5);
+        doc.text(achLines, margin + 5, y);
+        y += (achLines.length * 5);
+      });
+      y += 6;
+    });
+
+    doc.save(`${track.name.replace(/\s+/g, '_')}_Base.pdf`);
   };
 
   return (
@@ -229,6 +278,13 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ profile, onSave }) => {
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
+                      onClick={() => downloadBaseTrack(track)}
+                      className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      Download Base
+                    </button>
+                    <button 
                       onClick={() => addProjectToTrack(track.id)}
                       className="bg-white text-indigo-600 border border-indigo-100 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center gap-2"
                     >
@@ -249,7 +305,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ profile, onSave }) => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Structured JSON Intelligence</label>
                   <textarea
-                    key={JSON.stringify(track.content)} // Forces re-render when state changes from button click
+                    key={JSON.stringify(track.content)} 
                     defaultValue={JSON.stringify(track.content, null, 2)}
                     onBlur={(e) => updateTrackJson(track.id, e.target.value)}
                     className="w-full bg-slate-900 text-indigo-400 p-6 rounded-2xl font-mono text-[11px] h-80 shadow-inner outline-none focus:ring-2 focus:ring-indigo-500 transition-all scrollbar-hide"

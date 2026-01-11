@@ -277,27 +277,41 @@ export const mutateResume = async (job: Job, profile: UserProfile): Promise<Resu
 };
 
 /**
- * Extracts structured job data from raw text or a URL.
+ * Extracts structured job data from raw text, HTML snippets, or a URL.
+ * Robust platform identification and fallback URL handling.
  */
 export const extractJobData = async (input: string): Promise<Job> => {
   try {
     const ai = getAi();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Extract detailed job information from: ${input}`,
+      contents: `Analyze the following unstructured input (text, URL, or HTML dump) and extract structured job listing data:
+      
+      INPUT_CONTENT:
+      "${input}"`,
       config: {
-        systemInstruction: `Extract Title, Company, Location, Skills, Description, Platform, and Apply URL. Asses intent.`,
+        systemInstruction: `You are a high-precision Job Intelligence Extractor. 
+        Your goal is to parse messy inputs and identify:
+        1. Professional Job Details: Title, Company, Location.
+        2. Technical Requirements: A clean list of specific skills/technologies.
+        3. Comprehensive Description: A summary that captures the essence of the role.
+        4. Application URL: The most direct link to apply. If not found, look for mention of external sites.
+        5. Source Platform: Deduce if this originated from LinkedIn, Indeed, Wellfound (AngelList), or elsewhere.
+        6. Intent Analysis: Use signals to classify the job intent (e.g., Real Hire vs Ghost Job).
+        
+        If fields are missing, provide your most logical deduction or set to "Not Specified". 
+        If the input itself is a URL, assume that is the direct apply URL unless a better one is found in the text.`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            title: { type: Type.STRING },
-            company: { type: Type.STRING },
-            location: { type: Type.STRING },
-            skills: { type: Type.ARRAY, items: { type: Type.STRING } },
-            description: { type: Type.STRING },
-            applyUrl: { type: Type.STRING },
-            platform: { type: Type.STRING, enum: ['LinkedIn', 'Indeed', 'Wellfound', 'Other'] },
+            title: { type: Type.STRING, description: "The job title." },
+            company: { type: Type.STRING, description: "The hiring company." },
+            location: { type: Type.STRING, description: "The job location or 'Remote'." },
+            skills: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Required technical and soft skills." },
+            description: { type: Type.STRING, description: "A summary of the job description." },
+            applyUrl: { type: Type.STRING, description: "The direct application link." },
+            platform: { type: Type.STRING, enum: ['LinkedIn', 'Indeed', 'Wellfound', 'Other'], description: "The identified source platform." },
             intent: {
               type: Type.OBJECT,
               properties: {
@@ -308,25 +322,58 @@ export const extractJobData = async (input: string): Promise<Job> => {
               required: ["type", "confidence", "reasoning"]
             }
           },
-          required: ["title", "company", "description", "platform"]
+          required: ["title", "company", "description", "platform", "intent"]
         }
       }
     });
 
     const data = JSON.parse(response.text || "{}");
-    let finalApplyUrl = data.applyUrl || (input.startsWith('http') ? input : "#");
+    
+    // Robust URL Fallback
+    let finalApplyUrl = data.applyUrl;
+    if (!finalApplyUrl || finalApplyUrl === "" || finalApplyUrl === "Not Specified") {
+      // If the input starts with http, it is likely the URL itself
+      const trimmedInput = input.trim();
+      if (trimmedInput.startsWith('http')) {
+        finalApplyUrl = trimmedInput;
+      } else {
+        // Look for any URL-like pattern in the text if applyUrl wasn't found
+        const urlMatch = trimmedInput.match(/https?:\/\/[^\s]+/);
+        finalApplyUrl = urlMatch ? urlMatch[0] : "#";
+      }
+    }
 
     return {
       ...data,
       id: Math.random().toString(36).substr(2, 9),
+      title: data.title || "Untitled Role",
+      company: data.company || "Unknown Company",
+      location: data.location || "Location Not Specified",
       applyUrl: finalApplyUrl,
       scrapedAt: new Date().toISOString(),
       platform: data.platform || 'Other',
       skills: data.skills || [],
-      intent: data.intent || { type: JobIntent.REAL_HIRE, confidence: 0.5, reasoning: "Auto-analyzed" }
+      intent: data.intent || { 
+        type: JobIntent.REAL_HIRE, 
+        confidence: 0.5, 
+        reasoning: "Automated extraction fallback." 
+      }
     };
   } catch (error) {
-    throw new Error("Failed to extract job data.");
+    console.error("Extraction Error:", error);
+    // Return a minimal valid Job object on catastrophic failure
+    return {
+      id: Math.random().toString(36).substr(2, 9),
+      title: "Extraction Failed",
+      company: "Review Input Manually",
+      location: "Unknown",
+      skills: [],
+      description: "The agent could not parse this input. It may be too unstructured or encrypted.",
+      applyUrl: input.startsWith('http') ? input : "#",
+      scrapedAt: new Date().toISOString(),
+      platform: 'Other',
+      intent: { type: JobIntent.REAL_HIRE, confidence: 0, reasoning: "Extraction failed." }
+    };
   }
 };
 

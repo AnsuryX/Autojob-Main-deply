@@ -122,7 +122,8 @@ export enum ApplicationStatus {
   RISK_HALT = 'RISK_HALT',
   INTERPRETING = 'INTERPRETING',
   STRATEGIZING = 'STRATEGIZING',
-  AUGMENTING = 'AUGMENTING'
+  AUGMENTING = 'AUGMENTING',
+  VERIFYING = 'VERIFYING'
 }
 
 export interface CommandResult {
@@ -157,6 +158,13 @@ export interface StrategyPlan {
   status: 'ACTIVE' | 'PAUSED' | 'OPTIMIZING';
 }
 
+export interface VerificationProof {
+  dispatchHash: string;
+  networkLogs: string[];
+  virtualScreenshot?: string; // Base64 of a visual "receipt"
+  serverStatusCode: number;
+}
+
 export interface ApplicationLog {
   id: string;
   jobId: string;
@@ -171,6 +179,7 @@ export interface ApplicationLog {
   coverLetterStyle?: CoverLetterStyle;
   mutatedResume?: ResumeJson;
   mutationReport?: ResumeMutation['report'];
+  verification?: VerificationProof;
   error?: string;
 }
 
