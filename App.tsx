@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout.tsx';
 import ProfileEditor from './components/ProfileEditor.tsx';
 import JobHunter from './components/JobHunter.tsx';
+import FreelanceGigs from './components/FreelanceGigs.tsx';
 import ApplicationTracker from './components/ApplicationTracker.tsx';
 import Auth from './components/Auth.tsx';
 import { AppState, ApplicationLog, UserProfile, ApplicationStatus } from './types.ts';
@@ -129,10 +130,7 @@ const App: React.FC = () => {
 
   const handleNewApplication = async (log: ApplicationLog) => {
     if (!session?.user) return;
-    
-    // Optimistic Update
     setState(prev => ({ ...prev, applications: [log, ...prev.applications] }));
-
     try {
       const payload = {
         user_id: session.user.id,
@@ -148,23 +146,7 @@ const App: React.FC = () => {
         mutation_report: log.mutationReport,
         verification: log.verification || null
       };
-
-      const { data, error: insertError } = await supabase.from('applications').insert(payload).select().single();
-      
-      if (insertError) {
-        if (insertError.code === 'PGRST204') {
-          console.error("Column missing in 'applications' table. Data saved in memory only.");
-          setError("Warning: Database schema outdated. Columns 'location' or 'platform' missing. Run SQL script.");
-        } else {
-          throw insertError;
-        }
-      } else if (data) {
-        // Replace temporary log with DB log (to get correct ID)
-        setState(prev => ({
-          ...prev,
-          applications: prev.applications.map(app => app.id === log.id ? { ...log, id: data.id } : app)
-        }));
-      }
+      await supabase.from('applications').insert(payload);
     } catch (err: any) {
       console.error("Failed to sync application:", err);
     }
@@ -204,8 +186,10 @@ const App: React.FC = () => {
               onApply={handleNewApplication} 
               onStrategyUpdate={(p) => setState(prev => ({ ...prev, activeStrategy: p }))}
               onProfileUpdate={handleUpdateProfile}
+              onTabSwitch={setActiveTab}
             />
           )}
+          {activeTab === 'freelance' && <FreelanceGigs profile={state.profile} />}
         </>
       ) : <div className="p-20 text-center font-black text-slate-200 uppercase tracking-widest">Building Agent...</div>}
     </Layout>

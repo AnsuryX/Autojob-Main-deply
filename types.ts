@@ -59,29 +59,84 @@ export interface UserProfile {
   };
 }
 
-export enum JobIntent {
-  REAL_HIRE = 'Real Hire',
-  GHOST_JOB = 'Ghost Job',
-  DATA_HARVEST = 'Data Harvesting',
-  TRAINING_SCAM = 'Training/Upskilling Scam',
-  EVERGREEN = 'Evergreen/Pipeline'
-}
-
+// Added missing Job interface to fix errors in services/gemini.ts and components/JobHunter.tsx
 export interface Job {
   id: string;
+  scrapedAt: string;
   title: string;
   company: string;
   location: string;
   skills: string[];
   description: string;
   applyUrl: string;
-  scrapedAt: string;
-  platform: 'LinkedIn' | 'Indeed' | 'Wellfound' | 'Other';
-  intent?: {
-    type: JobIntent;
-    confidence: number;
-    reasoning: string;
+  platform: string;
+}
+
+export interface Gig {
+  id: string;
+  title: string;
+  platform: 'Upwork' | 'Fiverr' | 'Toptal' | 'Freelancer' | 'Other';
+  budget?: string;
+  duration?: string;
+  description: string;
+  url: string;
+  postedAt?: string;
+}
+
+export enum ApplicationStatus {
+  PENDING = 'PENDING',
+  EXTRACTING = 'EXTRACTING',
+  MATCHING = 'MATCHING',
+  GENERATING_CL = 'GENERATING_CL',
+  MUTATING_RESUME = 'MUTATING_RESUME',
+  APPLYING = 'APPLYING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  RISK_HALT = 'RISK_HALT',
+  INTERPRETING = 'INTERPRETING',
+  STRATEGIZING = 'STRATEGIZING',
+  AUGMENTING = 'AUGMENTING',
+  VERIFYING = 'VERIFYING'
+}
+
+export interface CommandResult {
+  action: 'apply' | 'pause' | 'resume' | 'filter' | 'limit' | 'blocked' | 'status' | 'strategy' | 'find_gigs';
+  goal?: string;
+  filters?: {
+    role?: string;
+    location?: string;
+    remote?: boolean;
+    company_type?: string;
   };
+}
+
+// Added missing VerificationProof interface to fix errors in components/JobHunter.tsx
+export interface VerificationProof {
+  virtualScreenshot?: string;
+  networkLogs?: string[];
+  serverStatusCode?: number;
+}
+
+export interface ApplicationLog {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  company: string;
+  status: ApplicationStatus;
+  timestamp: string;
+  url: string;
+  platform?: string;
+  location?: string;
+  coverLetter?: string;
+  mutatedResume?: ResumeJson;
+  mutationReport?: any;
+  verification?: VerificationProof;
+}
+
+export interface AppState {
+  profile: UserProfile | null;
+  applications: ApplicationLog[];
+  activeStrategy: any | null;
 }
 
 export interface DiscoveredJob {
@@ -104,97 +159,4 @@ export enum CoverLetterStyle {
   FOUNDER_FRIENDLY = 'Founder Friendly',
   TECHNICAL_DEEP_CUT = 'Technical Deep-Cut',
   CHILL_PROFESSIONAL = 'Chill but Professional'
-}
-
-export interface RiskStatus {
-  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  captchaCount: number;
-  domChangesDetected: boolean;
-  ipReputation: number; // 0-100
-  isLocked: boolean;
-}
-
-export enum ApplicationStatus {
-  PENDING = 'PENDING',
-  EXTRACTING = 'EXTRACTING',
-  MATCHING = 'MATCHING',
-  GENERATING_CL = 'GENERATING_CL',
-  MUTATING_RESUME = 'MUTATING_RESUME',
-  APPLYING = 'APPLYING',
-  COMPLETED = 'COMPLETED',
-  FAILED = 'FAILED',
-  RISK_HALT = 'RISK_HALT',
-  INTERPRETING = 'INTERPRETING',
-  STRATEGIZING = 'STRATEGIZING',
-  AUGMENTING = 'AUGMENTING',
-  VERIFYING = 'VERIFYING'
-}
-
-export interface CommandResult {
-  action: 'apply' | 'pause' | 'resume' | 'filter' | 'limit' | 'blocked' | 'status' | 'strategy';
-  goal?: string;
-  filters?: {
-    role?: string;
-    location?: string;
-    remote?: boolean;
-    company_type?: string;
-    posted_within?: string;
-    exclude_roles?: string[];
-  };
-  limits?: {
-    max_applications?: number;
-    daily_quota?: number;
-  };
-  schedule?: {
-    duration?: string;
-  };
-  reason?: string;
-}
-
-export interface StrategyPlan {
-  goal: string;
-  dailyQuota: number;
-  targetRoles: string[];
-  platforms: string[];
-  intensity: 'Aggressive' | 'Balanced' | 'Precision';
-  explanation: string;
-  lastUpdate: string;
-  status: 'ACTIVE' | 'PAUSED' | 'OPTIMIZING';
-}
-
-export interface VerificationProof {
-  dispatchHash: string;
-  networkLogs: string[];
-  virtualScreenshot?: string; // Base64 of a visual "receipt"
-  serverStatusCode: number;
-  timings?: {
-    dnsMs: number;
-    tlsMs: number;
-    requestMs: number;
-  };
-  fieldValidation?: Record<string, 'VALID' | 'INVALID'>;
-}
-
-export interface ApplicationLog {
-  id: string;
-  jobId: string;
-  jobTitle: string;
-  company: string;
-  status: ApplicationStatus;
-  timestamp: string;
-  url: string;
-  platform?: string;
-  location?: string;
-  coverLetter?: string;
-  coverLetterStyle?: CoverLetterStyle;
-  mutatedResume?: ResumeJson;
-  mutationReport?: ResumeMutation['report'];
-  verification?: VerificationProof;
-  error?: string;
-}
-
-export interface AppState {
-  profile: UserProfile | null;
-  applications: ApplicationLog[];
-  activeStrategy: StrategyPlan | null;
 }

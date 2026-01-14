@@ -12,13 +12,15 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, onLogout }) => {
   const tabs = [
     { id: 'discover', label: 'Job Hunter', icon: <Icons.Briefcase /> },
+    { id: 'freelance', label: 'Freelance Gigs', icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+    )},
     { id: 'profile', label: 'User Profile', icon: <Icons.User /> },
     { id: 'history', label: 'History', icon: <Icons.History /> },
   ];
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      {/* Sidebar / Navigation */}
       <nav className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shrink-0">
         <div className="mb-8 px-2 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg">A</div>
@@ -67,7 +69,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, onLo
         </div>
       </nav>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-6 md:p-10 overflow-y-auto">
         <div className="max-w-4xl mx-auto">
           {children}
