@@ -66,14 +66,14 @@ const RoadmapAgent: React.FC<RoadmapAgentProps> = ({ profile }) => {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">Evolution Timeline</p>
               <div className="space-y-4 relative">
                 <div className="absolute left-6 top-4 bottom-4 w-0.5 bg-slate-100"></div>
-                {roadmap.steps.map((step, i) => (
+                {roadmap.steps?.map((step, i) => (
                   <div key={i} className="relative pl-12">
                     <div className="absolute left-[20px] top-1.5 w-3 h-3 rounded-full bg-indigo-500 border-2 border-white shadow-sm z-10"></div>
                     <div className="bg-white border border-slate-100 p-5 rounded-2xl hover:border-indigo-200 transition-all shadow-sm">
                       <p className="text-[9px] font-black text-indigo-500 uppercase mb-1">{step.period}</p>
                       <h4 className="font-black text-slate-800 text-sm mb-2">{step.goal}</h4>
                       <div className="flex flex-wrap gap-1.5 mt-3">
-                        {step.skillGain.map((s, j) => (
+                        {step.skillGain?.map((s, j) => (
                           <span key={j} className="text-[8px] font-bold bg-slate-50 text-slate-500 px-2 py-0.5 rounded uppercase">{s}</span>
                         ))}
                       </div>

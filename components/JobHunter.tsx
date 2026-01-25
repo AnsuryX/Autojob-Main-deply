@@ -128,7 +128,7 @@ const JobHunter: React.FC<JobHunterProps> = ({ profile, discoveredJobs, onDiscov
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Discovery List */}
         <div className={`${currentJob ? 'lg:col-span-4' : 'lg:col-span-8'} space-y-3`}>
-          {discoveredJobs.map((job, i) => (
+          {discoveredJobs?.map((job, i) => (
             <div 
               key={i} 
               className={`bg-white border p-5 rounded-2xl flex flex-col gap-4 shadow-sm cursor-pointer hover:border-indigo-400 group transition-all ${jobInput === job.url ? 'ring-2 ring-indigo-500' : 'border-slate-200'}`}
