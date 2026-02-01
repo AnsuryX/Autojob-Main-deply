@@ -4,6 +4,14 @@
 
 ---
 
+## 📱 Progressive Web App (PWA)
+AutoJob Cloud is designed to be installed on your workstation or mobile device for a native experience:
+- **Desktop**: Click the "Install" icon in your Chrome/Edge address bar.
+- **Mobile**: Use "Add to Home Screen" from your browser's share menu.
+- **Features**: Works offline, full-screen mode, and standalone launch.
+
+---
+
 ## 🧠 Core Features
 
 ### 1. Lead Discovery Hub (Real-time Grounding)
@@ -28,10 +36,6 @@ A voice-native simulation environment using the **Gemini Live API**.
 - **Real-time Interaction**: Low-latency PCM audio streaming for human-like conversation.
 - **Persona Simulation**: Challenge yourself against challenging "Technical Hiring Manager" personas.
 - **Live Transcription**: Instant feedback and analysis of your responses.
-
-### 5. Freelance Gig Engine
-Identifies high-value projects on Upwork, Fiverr, and Toptal.
-- **Neural Bidding**: Generates high-conversion proposals tailored to the specific project brief and your expertise.
 
 ---
 
@@ -66,14 +70,6 @@ Access the agent's brain directly using `CMD + K` (or `CTRL + K`).
 1.  **Identity Setup**: Head to the **Identity** tab and upload your base resume. The neural parser will deconstruct it into structured JSON.
 2.  **Define Preferences**: Set your target roles, locations, and salary floor in your profile to guide the agent's autonomous searches.
 3.  **Mission Command**: Use the terminal to start your first search. The agent will persist your results and track your progress across the cloud.
-
----
-
-## 🛡 Security & Privacy
-
-- **Identity Isolation**: Your data is strictly bound to your Supabase Auth identity.
-- **Direct API Interaction**: The agent interacts directly with Google's GenAI endpoints using your environment-secured API key.
-- **Audit Logs**: Every "dispatch" (application) is recorded in your local history for full transparency of the agent's actions.
 
 ---
 

@@ -1,30 +1,30 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AutoJob Cloud | Autonomous Job Application Agent</title>
     <meta name="description" content="A professional-grade autonomous agent for job application automation, resume mutation, and strategic job hunting.">
     <meta name="theme-color" content="#4f46e5">
-    <link rel="manifest" href="/manifest.json">
+    
+    <!-- PWA Primary Meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AutoJob">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2906/2906206.png">
+    <link rel="manifest" href="manifest.json">
+    
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2906/2906206.png">
     
     <!-- 1. Node.js Process Shim -->
     <script>
       window.process = window.process || { env: {} };
-      // Fallback values for Supabase if not provided by the environment
       const defaultEnv = {
         SUPABASE_URL: "https://mkwuyxigbnyrkcwvfgjq.supabase.co",
         SUPABASE_ANON_KEY: "sb_publishable_VDrYtNeRIrz1NMp87QAWXA_2LzlC2o-",
         SERP_API_KEY: "27ddff8705491b7d7afea84cb7542b47959e724308e28dd08cf6e5fadef425bb"
       };
-      
-      // Merge: Platform Env > Default Env
-      window.process.env = {
-        ...defaultEnv,
-        ...window.process.env
-      };
+      window.process.env = { ...defaultEnv, ...window.process.env };
     </script>
 
     <!-- 2. Optimized Import Map -->
@@ -45,11 +45,16 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      ::-webkit-scrollbar { width: 8px; }
-      ::-webkit-scrollbar-track { background: #f1f5f9; }
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      body { -webkit-tap-highlight-color: transparent; }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: content-box; }
+      
+      body { 
+        -webkit-tap-highlight-color: transparent;
+        background: radial-gradient(circle at 0% 0%, #f1f5f9 0%, #ffffff 100%);
+      }
+
       @keyframes scan {
         0% { transform: translateY(-100%); }
         100% { transform: translateY(100%); }
@@ -64,18 +69,43 @@
         70% { box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
         100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
       }
+      @keyframes pulse-ring {
+        0% { transform: scale(0.33); opacity: 0; }
+        50% { opacity: 0.6; }
+        100% { transform: scale(1); opacity: 0; }
+      }
+
       .animate-scan { animation: scan 2s linear infinite; }
       .animate-success-pop { animation: success-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
       .animate-success-glow { animation: success-glow 1.5s ease-out infinite; }
-      .glass-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+      .pulse-ring { animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
+
+      .glass-hud {
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .neural-mesh {
+        background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                          radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                          radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
       }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('service-worker.js').then(registration => {
+            console.log('SW registered: ', registration);
+          }).catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+        });
+      }
+    </script>
 </body>
 </html>
