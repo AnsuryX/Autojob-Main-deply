@@ -1,4 +1,18 @@
 
+export interface OutreachDraft {
+  platform: 'LinkedIn' | 'Email';
+  recipientRole: string;
+  message: string;
+}
+
+export interface InterviewScorecard {
+  overallScore: number;
+  technicalAccuracy: number;
+  communicationTone: string;
+  keyStrengths: string[];
+  improvementAreas: string[];
+}
+
 export interface ResumeJson {
   summary: string;
   skills: string[];
@@ -91,6 +105,7 @@ export interface Job {
   platform: string;
   salary?: string;
   thumbnail?: string;
+  outreach?: OutreachDraft[];
 }
 
 export interface Gig {
@@ -144,6 +159,7 @@ export interface DiscoveredJob {
   thumbnail?: string;
   description?: string;
   postedAt?: string;
+  matchScore?: number;
 }
 
 export interface MatchResult {

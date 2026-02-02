@@ -1,11 +1,61 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { Job, UserProfile, CareerRoadmap, MarketInsights, DiscoveredJob, ResumeJson, Gig, CommandResult } from "../types.ts";
+import { Job, UserProfile, CareerRoadmap, MarketInsights, DiscoveredJob, ResumeJson, Gig, CommandResult, OutreachDraft, InterviewScorecard } from "../types.ts";
 
 const getAi = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("Missing Gemini API Key.");
   return new GoogleGenAI({ apiKey });
+};
+
+export const generateOutreach = async (job: Job, profile: UserProfile): Promise<OutreachDraft[]> => {
+  const ai = getAi();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Generate two ultra-short, personalized outreach messages for this job: ${job.title} at ${job.company}.
+    Target: 1 LinkedIn message (max 250 chars) and 1 Email. 
+    Use user context: ${profile.resumeTracks[0]?.content.summary}.
+    Highlight a shared skill or value based on the job desc: ${job.description}`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            platform: { type: Type.STRING, enum: ['LinkedIn', 'Email'] },
+            recipientRole: { type: Type.STRING },
+            message: { type: Type.STRING }
+          }
+        }
+      }
+    }
+  });
+  return JSON.parse(response.text || "[]");
+};
+
+export const evaluateInterview = async (transcript: string[], profile: UserProfile): Promise<InterviewScorecard> => {
+  const ai = getAi();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Evaluate this interview transcript between the user and AI: ${transcript.join('\n')}.
+    Candidate profile: ${JSON.stringify(profile.resumeTracks[0]?.content)}.
+    Evaluate technical accuracy, communication tone, and keywords.`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          overallScore: { type: Type.NUMBER },
+          technicalAccuracy: { type: Type.NUMBER },
+          communicationTone: { type: Type.STRING },
+          keyStrengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+          improvementAreas: { type: Type.ARRAY, items: { type: Type.STRING } }
+        }
+      }
+    }
+  });
+  return JSON.parse(response.text || "{}");
 };
 
 export const getMarketInsights = async (role: string): Promise<MarketInsights> => {
@@ -78,7 +128,6 @@ export const generateCareerRoadmap = async (profile: UserProfile): Promise<Caree
   return JSON.parse(response.text || "{}");
 };
 
-// Interview Live session helper functions
 export const encodeAudio = (bytes: Uint8Array) => {
   let binary = '';
   const len = bytes.byteLength;
@@ -343,13 +392,9 @@ export const addRelevantExperienceViaAI = async (prompt: string, currentResume: 
   return JSON.parse(response.text || JSON.stringify(currentResume));
 };
 
-/**
- * Searches for real job listings using SerpAPI or falling back to live Google Search grounding.
- */
 export const searchJobsPro = async (query: string): Promise<DiscoveredJob[]> => {
   const SERP_API_KEY = (window as any).process?.env?.SERP_API_KEY;
   if (!SERP_API_KEY) {
-    console.warn("SerpAPI key missing, falling back to verified live search.");
     return searchJobs({ targetRoles: [query] });
   }
 
@@ -535,10 +580,6 @@ export const extractJobData = async (input: string): Promise<Job> => {
   return { ...data, id: Math.random().toString(36).substr(2, 9), scrapedAt: new Date().toISOString() };
 };
 
-/**
- * Fallback verified job search using Gemini Grounding.
- * Strictly searches for active job listings on the web.
- */
 export const searchJobs = async (preferences: any): Promise<DiscoveredJob[]> => {
   const ai = getAi();
   const response = await ai.models.generateContent({
