@@ -5,12 +5,27 @@ export interface OutreachDraft {
   message: string;
 }
 
+export interface TranscriptAnnotation {
+  text: string;
+  speaker: 'User' | 'AI';
+  feedback?: string;
+  sentiment?: 'positive' | 'neutral' | 'negative';
+}
+
 export interface InterviewScorecard {
   overallScore: number;
   technicalAccuracy: number;
   communicationTone: string;
   keyStrengths: string[];
   improvementAreas: string[];
+  annotations: TranscriptAnnotation[];
+}
+
+export interface InterviewSession {
+  id: string;
+  timestamp: string;
+  persona: string;
+  scorecard: InterviewScorecard;
 }
 
 export interface ResumeJson {
@@ -214,6 +229,7 @@ export interface TaskState {
 export interface AppState {
   profile: UserProfile | null;
   applications: ApplicationLog[];
+  interviewHistory: InterviewSession[];
   activeStrategy: any;
   discoveredJobs: DiscoveredJob[];
   roadmap: CareerRoadmap | null;

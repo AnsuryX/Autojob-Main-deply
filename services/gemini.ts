@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { Job, UserProfile, CareerRoadmap, MarketInsights, DiscoveredJob, ResumeJson, Gig, CommandResult, OutreachDraft, InterviewScorecard } from "../types.ts";
+import { Job, UserProfile, CareerRoadmap, MarketInsights, DiscoveredJob, ResumeJson, Gig, CommandResult, OutreachDraft, InterviewScorecard, TranscriptAnnotation } from "../types.ts";
 
 const getAi = () => {
   const apiKey = process.env.API_KEY;
@@ -34,13 +34,14 @@ export const generateOutreach = async (job: Job, profile: UserProfile): Promise<
   return JSON.parse(response.text || "[]");
 };
 
-export const evaluateInterview = async (transcript: string[], profile: UserProfile): Promise<InterviewScorecard> => {
+export const evaluateInterview = async (transcript: TranscriptAnnotation[], profile: UserProfile): Promise<InterviewScorecard> => {
   const ai = getAi();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Evaluate this interview transcript between the user and AI: ${transcript.join('\n')}.
+    contents: `Evaluate this interview transcript: ${JSON.stringify(transcript)}.
     Candidate profile: ${JSON.stringify(profile.resumeTracks[0]?.content)}.
-    Evaluate technical accuracy, communication tone, and keywords.`,
+    Evaluate technical accuracy, communication tone, and keywords.
+    For each user turn in the transcript, provide "feedback" (max 15 words) and a "sentiment".`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -50,7 +51,19 @@ export const evaluateInterview = async (transcript: string[], profile: UserProfi
           technicalAccuracy: { type: Type.NUMBER },
           communicationTone: { type: Type.STRING },
           keyStrengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-          improvementAreas: { type: Type.ARRAY, items: { type: Type.STRING } }
+          improvementAreas: { type: Type.ARRAY, items: { type: Type.STRING } },
+          annotations: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                text: { type: Type.STRING },
+                speaker: { type: Type.STRING },
+                feedback: { type: Type.STRING },
+                sentiment: { type: Type.STRING, enum: ['positive', 'neutral', 'negative'] }
+              }
+            }
+          }
         }
       }
     }

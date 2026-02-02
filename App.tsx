@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from './components/Layout.tsx';
 import ProfileEditor from './components/ProfileEditor.tsx';
@@ -9,7 +10,7 @@ import RoadmapAgent from './components/RoadmapAgent.tsx';
 import InterviewSimulator from './components/InterviewSimulator.tsx';
 import Auth from './components/Auth.tsx';
 import CommandTerminal from './components/CommandTerminal.tsx';
-import { AppState, ApplicationLog, UserProfile, ApplicationStatus, ResumeJson, DiscoveredJob, CommandResult, TaskState } from './types.ts';
+import { AppState, ApplicationLog, UserProfile, ApplicationStatus, ResumeJson, DiscoveredJob, CommandResult, TaskState, InterviewSession } from './types.ts';
 import { DEFAULT_PROFILE } from './constants.tsx';
 import { supabase } from './lib/supabase.ts';
 import { searchJobsPro, addRelevantExperienceViaAI, generateCareerRoadmap } from './services/gemini.ts';
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>({ 
     profile: null, 
     applications: [], 
+    interviewHistory: [],
     activeStrategy: null,
     discoveredJobs: [],
     roadmap: null,
@@ -55,7 +57,8 @@ const App: React.FC = () => {
             full_name: DEFAULT_PROFILE.fullName,
             email: session.user.email,
             resume_tracks: DEFAULT_PROFILE.resume_tracks || DEFAULT_PROFILE.resumeTracks,
-            preferences: DEFAULT_PROFILE.preferences
+            preferences: DEFAULT_PROFILE.preferences,
+            interview_history: []
           };
           const { data: created } = await supabase.from('profiles').insert(initial).select().single();
           profileData = created;
@@ -73,6 +76,7 @@ const App: React.FC = () => {
             resumeTracks: profileData.resume_tracks || [],
             preferences: profileData.preferences || DEFAULT_PROFILE.preferences
           },
+          interviewHistory: profileData.interview_history || [],
           applications: (appsData || []).map((app: any) => ({
             id: app.id,
             jobId: app.job_id,
@@ -85,7 +89,7 @@ const App: React.FC = () => {
             location: app.location || 'Remote',
             coverLetter: app.cover_letter,
             mutatedResume: app.mutated_resume,
-            mutationReport: app.mutation_report,
+            mutation_report: app.mutation_report,
             verification: app.verification
           }))
         }));
@@ -104,45 +108,6 @@ const App: React.FC = () => {
         [id]: { ...prev.tasks[id], ...updates } as TaskState
       }
     }));
-  };
-
-  const runRoadmapGeneration = async () => {
-    if (!state.profile || state.tasks.roadmap.status === 'running') return;
-    
-    updateTask('roadmap', { status: 'running', progress: 5, message: 'Initiating Neural Scan...' });
-    
-    // Simulate progress steps while waiting for Gemini
-    const steps = [
-      { p: 15, m: 'Fetching Market Benchmarks...' },
-      { p: 30, m: 'Identifying Skill Gaps...' },
-      { p: 50, m: 'Synthesizing Strategic Roadmap...' },
-      { p: 75, m: 'Optimizing Evolution Timeline...' },
-      { p: 90, m: 'Finalizing Deployment Kit...' }
-    ];
-    
-    let stepIdx = 0;
-    const interval = setInterval(() => {
-      if (stepIdx < steps.length) {
-        updateTask('roadmap', { progress: steps[stepIdx].p, message: steps[stepIdx].m });
-        stepIdx++;
-      }
-    }, 2000);
-
-    try {
-      const roadmap = await generateCareerRoadmap(state.profile);
-      clearInterval(interval);
-      setState(prev => ({
-        ...prev,
-        roadmap,
-        tasks: {
-          ...prev.tasks,
-          roadmap: { id: 'roadmap', status: 'completed', progress: 100, message: 'Strategy Ready' }
-        }
-      }));
-    } catch (e: any) {
-      clearInterval(interval);
-      updateTask('roadmap', { status: 'error', message: 'Roadmap Generation Failed', error: e.message });
-    }
   };
 
   const handleUpdateProfile = async (newProfile: UserProfile) => {
@@ -165,32 +130,16 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateTrack = (trackId: string, content: ResumeJson) => {
-    if (!state.profile) return;
-    const newTracks = state.profile.resumeTracks.map(t => t.id === trackId ? { ...t, content } : t);
-    handleUpdateProfile({ ...state.profile, resumeTracks: newTracks });
-  };
-
-  const handleNewApplication = async (log: ApplicationLog) => {
-    if (!session?.user) return;
-    setState(prev => ({ ...prev, applications: [log, ...prev.applications] }));
+  const handleSaveInterviewSession = async (newSession: InterviewSession) => {
+    if (!session?.user || !state.profile) return;
+    const updatedHistory = [newSession, ...state.interviewHistory];
+    setState(prev => ({ ...prev, interviewHistory: updatedHistory }));
     try {
-      await supabase.from('applications').insert({
-        user_id: session.user.id,
-        job_id: log.jobId,
-        job_title: log.jobTitle,
-        company: log.company,
-        status: log.status,
-        url: log.url,
-        platform: log.platform || 'Other',
-        location: log.location || 'Remote',
-        cover_letter: log.coverLetter,
-        mutated_resume: log.mutatedResume,
-        mutation_report: log.mutationReport,
-        verification: log.verification || null
-      });
+      await supabase.from('profiles').update({
+        interview_history: updatedHistory
+      }).eq('id', session.user.id);
     } catch (err: any) {
-      console.error(err);
+       console.error("Failed to persist interview session:", err);
     }
   };
 
@@ -201,7 +150,6 @@ const App: React.FC = () => {
       switch (cmd.action) {
         case 'switch_tab': if (cmd.params?.target_tab) setActiveTab(cmd.params.target_tab); break;
         case 'start_interview': setActiveTab('interview'); break;
-        case 'strategy': setActiveTab('roadmap'); runRoadmapGeneration(); break;
         case 'search_jobs': 
           const query = cmd.params?.query || cmd.goal || "";
           if (query) {
@@ -210,14 +158,6 @@ const App: React.FC = () => {
             setState(prev => ({ ...prev, discoveredJobs: jobs }));
             updateTask('discovery', { status: 'completed', progress: 100, message: 'Discovery Complete' });
             setActiveTab('discover');
-          }
-          break;
-        case 'improve_resume':
-          if (cmd.params?.improvement_prompt && state.profile.resumeTracks?.length > 0) {
-            const track = state.profile.resumeTracks[0];
-            const improved = await addRelevantExperienceViaAI(cmd.params.improvement_prompt, track.content);
-            handleUpdateTrack(track.id, improved);
-            setActiveTab('resume_lab');
           }
           break;
       }
@@ -239,7 +179,6 @@ const App: React.FC = () => {
   
   if (!session) return <Auth />;
 
-  // Fix: Property 'status' does not exist on type 'unknown'. Added explicit type cast to TaskState.
   const anyTaskRunning = (Object.values(state.tasks) as TaskState[]).some(t => t.status === 'running');
 
   return (
@@ -251,16 +190,6 @@ const App: React.FC = () => {
     >
       <CommandTerminal onExecute={handleGlobalCommand} isProcessing={isCommandProcessing} />
       
-      {error && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex flex-col gap-2 shadow-sm animate-in slide-in-from-top-4">
-          <div className="flex justify-between items-center">
-            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">System Alert</p>
-            <button onClick={() => setError(null)} className="text-amber-500 hover:text-amber-700 font-bold">✕</button>
-          </div>
-          <p className="text-xs font-mono text-amber-700">{error}</p>
-        </div>
-      )}
-      
       {state.profile ? (
         <>
           {activeTab === 'profile' && <ProfileEditor profile={state.profile} onSave={handleUpdateProfile} onLogout={() => supabase.auth.signOut()} />}
@@ -271,7 +200,7 @@ const App: React.FC = () => {
               activeStrategy={state.activeStrategy}
               discoveredJobs={state.discoveredJobs}
               onDiscoveredJobsUpdate={(jobs) => setState(prev => ({ ...prev, discoveredJobs: jobs }))}
-              onApply={handleNewApplication} 
+              onApply={(log) => setState(prev => ({ ...prev, applications: [log, ...prev.applications] }))} 
               onStrategyUpdate={(p) => setState(prev => ({ ...prev, activeStrategy: p }))}
               onProfileUpdate={handleUpdateProfile}
               onTabSwitch={setActiveTab}
@@ -279,16 +208,30 @@ const App: React.FC = () => {
             />
           )}
           {activeTab === 'freelance' && <FreelanceGigs profile={state.profile} />}
-          {activeTab === 'resume_lab' && <ResumeBuilder profile={state.profile} onUpdateTrack={handleUpdateTrack} />}
+          {activeTab === 'resume_lab' && <ResumeBuilder profile={state.profile} onUpdateTrack={(id, content) => {
+            const newTracks = state.profile!.resumeTracks.map(t => t.id === id ? { ...t, content } : t);
+            handleUpdateProfile({ ...state.profile!, resumeTracks: newTracks });
+          }} />}
           {activeTab === 'roadmap' && (
             <RoadmapAgent 
               profile={state.profile} 
               roadmap={state.roadmap} 
               task={state.tasks.roadmap} 
-              onTrigger={runRoadmapGeneration}
+              onTrigger={async () => {
+                updateTask('roadmap', { status: 'running', progress: 5, message: 'Initiating Neural Scan...' });
+                const roadmap = await generateCareerRoadmap(state.profile!);
+                setState(prev => ({ ...prev, roadmap }));
+                updateTask('roadmap', { status: 'completed', progress: 100, message: 'Strategy Ready' });
+              }}
             />
           )}
-          {activeTab === 'interview' && <InterviewSimulator profile={state.profile} />}
+          {activeTab === 'interview' && (
+            <InterviewSimulator 
+              profile={state.profile} 
+              history={state.interviewHistory}
+              onSessionSave={handleSaveInterviewSession}
+            />
+          )}
         </>
       ) : <div className="p-20 text-center font-black text-slate-200 uppercase tracking-widest">Building Agent...</div>}
     </Layout>
